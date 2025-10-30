@@ -382,7 +382,7 @@ body[data-theme='light'] .project-card .card-description {
 .profile-info {
     display: flex;
     flex-direction: column;
-    align-items: flex-start; /* Ensures all items inside are left-aligned */
+    align-items: flex-start; 
 }
 
 .profile-picture {
@@ -407,14 +407,20 @@ body[data-theme='light'] .profile-name {
 .profile-id {
     font-size: 18px;
     color: var(--text-muted-dark);
-    margin: 0 0 10px 0; /* Reduced margin */
+    margin: 0 0 10px 0;
 }
 
 body[data-theme='light'] .profile-id {
     color: var(--text-muted-light);
 }
 
-.github-btn {
+.social-links {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.social-btn {
     position: relative;
     overflow: hidden;
     display: inline-flex;
@@ -428,10 +434,9 @@ body[data-theme='light'] .profile-id {
     text-decoration: none;
     font-size: 14px;
     transition: all 0.3s ease;
-    margin-bottom: 20px;
 }
 
-.github-btn::after {
+.social-btn::after {
     content: '';
     position: absolute;
     top: 0;
@@ -443,22 +448,22 @@ body[data-theme='light'] .profile-id {
     animation: shine 5s infinite;
 }
 
-.github-btn:hover {
+.social-btn:hover {
     background-color: hsla(205, 87%, 45%, 0.6);
     transform: translateY(-2px);
 }
 
-body[data-theme='light'] .github-btn {
+body[data-theme='light'] .social-btn {
     background-color: hsla(205, 87%, 50%, 0.2);
     border-color: hsla(205, 87%, 50%, 0.4);
     color: var(--text-header-light);
 }
 
-body[data-theme='light'] .github-btn:hover {
+body[data-theme='light'] .social-btn:hover {
     background-color: hsla(205, 87%, 50%, 0.3);
 }
 
-.github-btn svg {
+.social-btn svg {
     width: 16px;
     height: 16px;
 }
