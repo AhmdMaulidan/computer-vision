@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}Tambah Tugas Baru{% endblock %}
+
+{% block header %}Tambah Tugas Baru{% endblock %}
+
+{% block content %}
+<style>
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        color: #e0e0e0;
+        font-weight: 500;
+    }
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        background-color: #1c1c1e;
+        border: 1px solid #333;
+        border-radius: 8px;
+        color: #e0e0e0;
+        font-size: 16px;
+    }
+    .form-group input[type="file"] {
+        padding: 8px;
+    }
+    .form-group textarea {
+        min-height: 200px;
+        resize: vertical;
+    }
+    .submit-btn {
+        background-color: #15BCF8;
+        color: #000;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+    .submit-btn:hover {
+        background-color: #49d0fc;
+    }
+</style>
+
+<form method="POST" enctype="multipart/form-data">
+    <div class="form-group">
+        <label for="title">Judul</label>
+        <input type="text" id="title" name="title" required>
+    </div>
+    <div class="form-group">
+        <label for="thumbnail">Thumbnail Gambar</label>
+        <input type="file" id="thumbnail" name="thumbnail" accept="image/*" required>
+    </div>
+    <div class="form-group">
+        <label for="description">Deskripsi Singkat (untuk kartu)</label>
+        <textarea id="description" name="description" rows="3" required></textarea>
+    </div>
+    <div class="form-group">
+        <label for="content">Isi Materi Lengkap (mendukung HTML)</label>
+        <textarea id="content" name="content" rows="10"></textarea>
+    </div>
+    <button type="submit" class="submit-btn">Simpan Tugas</button>
+</form>
+
+<script>
+    tinymce.init({
+        selector: 'textarea#content',
+        plugins: 'advlist autolink lists link image charmap preview anchor',
+        toolbar: 'undo redo | styleselect | bold italic | alignleft aligncenter alignright alignjustify | ' +
+                 'bullist numlist outdent indent | link image',
+        skin: 'oxide-dark',
+        content_css: 'dark',
+        content_style: 'body { background-color: #1c1c1e; color: #e0e0e0; }'
+    });
+</script>
+
+{% endblock %}

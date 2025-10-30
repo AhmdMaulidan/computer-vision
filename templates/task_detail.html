@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ task.title }}{% endblock %}
+
+{% block header %}{{ task.title }}{% endblock %}
+
+{% block content %}
+
+<div class="task-content">
+    {{ task.content|safe }}
+</div>
+
+<div class="crud-actions">
+    <a href="{{ url_for('edit_task', task_id=task.id) }}" class="action-btn edit-btn">Edit</a>
+    <form action="{{ url_for('delete_task', task_id=task.id) }}" method="POST"
+        onsubmit="return confirm('Apakah Anda yakin ingin menghapus materi ini?');">
+        <button type="submit" class="action-btn delete-btn">Hapus</button>
+    </form>
+</div>
+
+{% endblock %}

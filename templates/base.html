@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Website Soft Computing{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.tiny.cloud/1/nvmyoc0zv5a0ynw24f8i93o6gjsn31hpcb8ry63r8ygnyf86/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+</head>
+<body>
+
+    <nav class="top-nav">
+        <!-- Home Button is active when there is NO sidebar -->
+        <a href="{{ url_for('index') }}" class="nav-item {% if not show_sidebar %}active{% endif %}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            <span>Home</span>
+        </a>
+        
+        <!-- Tugas/Materi Button is active when the sidebar IS shown -->
+        <a href="{{ url_for('tugas') }}" class="nav-item {% if show_sidebar %}active{% endif %}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span>Materi/Tugas</span>
+        </a>
+
+        <!-- Mode Toggle Button -->
+        <button class="nav-item theme-toggle">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            <span>Mode</span>
+        </button>
+    </nav>
+
+    <div class="wrapper">
+        {% if show_sidebar %}
+        <aside class="sidebar">
+            <h1 class="sidebar-title">Soft Computing</h1>
+            <nav class="sidebar-nav">
+                <ul>
+                    {% for task_item in tasks %}
+                    <li><a href="{{ url_for('task_detail', task_id=task_item.id) }}">{{ task_item.title }}</a></li>
+                    {% endfor %}
+                </ul>
+            </nav>
+        </aside>
+        {% endif %}
+
+        <main class="main-content {% if not show_sidebar %}full-width{% endif %}">
+            {# Flash Messages #}
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <header>
+                <h2>{% block header %}{% endblock %}</h2>
+            </header>
+            <article>
+                {% block content %}{% endblock %}
+            </article>
+        </main>
+    </div>
+
+    <script>
+        const themeToggle = document.querySelector('.theme-toggle');
+        const body = document.body;
+
+        // Function to apply the saved theme
+        const applyTheme = () => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                body.setAttribute('data-theme', savedTheme);
+            }
+        };
+
+        // Function to toggle the theme
+        const toggleTheme = () => {
+            let newTheme = 'light';
+            if (body.getAttribute('data-theme') === 'light') {
+                newTheme = 'dark';
+            }
+            body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+        };
+
+        // Add event listener
+        themeToggle.addEventListener('click', toggleTheme);
+
+        // Apply theme on initial load
+        applyTheme();
+    </script>
+</body>
+</html>
