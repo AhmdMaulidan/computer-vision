@@ -6,16 +6,97 @@
 
 {% block content %}
 
+{# Loading Overlay #}
+<div class="loading-overlay" id="loading-overlay" style="display: none;">
+    <div class="loader"></div>
+    <p>Menghasilkan peta fitur...</p>
+</div>
+
 <div class="task-content">
     {{ task.content|safe }}
 </div>
 
-<div class="crud-actions">
-    <a href="{{ url_for('edit_task', task_id=task.id) }}" class="action-btn edit-btn">Edit</a>
-    <form action="{{ url_for('delete_task', task_id=task.id) }}" method="POST"
-        onsubmit="return confirm('Apakah Anda yakin ingin menghapus materi ini?');">
-        <button type="submit" class="action-btn delete-btn">Hapus</button>
+<hr class="section-divider">
+
+{# GLCM Tool Form #}
+<div class="glcm-tool-container">
+    <form method="POST" enctype="multipart/form-data" class="glcm-form">
+        <div class="form-group">
+            <label for="image-upload-label">Unggah Gambar</label>
+            <label for="image-upload" class="custom-file-upload" id="image-upload-label">
+                <span id="file-name-display">Pilih file gambar...</span>
+            </label>
+            <input type="file" id="image-upload" name="image" accept="image/*" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="angle-select">Pilih Sudut</label>
+            <select id="angle-select" name="angle">
+                <option value="0">0°</option>
+                <option value="45">45°</option>
+                <option value="90">90°</option>
+                <option value="135">135°</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="distance-input">Pilih Jarak</label>
+            <input type="number" id="distance-input" name="distance" value="1" min="1" max="20" class="number-input">
+        </div>
+        
+        <div class="form-group">
+            <label for="window-size-input">Ukuran Jendela</label>
+            <input type="number" id="window-size-input" name="window_size" value="7" min="3" step="2" class="number-input">
+        </div>
+        
+        <button type="submit" class="btn-submit">Hitung Peta Fitur</button>
     </form>
 </div>
+
+{# Results Section #}
+{% if feature_maps and image_url and params %}
+<div class="glcm-results-container">
+    <div class="results-header">
+        <h3>Hasil Analisis</h3>
+        <p class="results-subheader">Parameter: Sudut {{ params.angle }}°, Jarak {{ params.distance }}, Jendela {{ params.window }}x{{ params.window }}</p>
+    </div>
+    
+    <div class="main-results-grid">
+        <div class="feature-maps-container">
+            <h4>Peta Fitur Tekstur</h4>
+            <div class="feature-maps-grid">
+                <div class="map-item"><h6>Gambar Asli</h6><img src="{{ image_url }}" alt="Original image"></div>
+                <div class="map-item"><h6>Kontras</h6><img src="{{ feature_maps.contrast }}" alt="Contrast map"></div>
+                <div class="map-item"><h6>Korelasi</h6><img src="{{ feature_maps.correlation }}" alt="Correlation map"></div>
+                <div class="map-item"><h6>Energi</h6><img src="{{ feature_maps.energy }}" alt="Energy map"></div>
+                <div class="map-item"><h6>Homogenitas</h6><img src="{{ feature_maps.homogeneity }}" alt="Homogeneity map"></div>
+            </div>
+        </div>
+
+        {% if global_properties %}
+        <div class="global-properties-container">
+            <h4>Properti Global (Rata-rata)</h4>
+            <ul class="properties-list">
+                {% for prop, value in global_properties.items() %}
+                <li>
+                    <span class="property-name">{{ prop }}</span>
+                    <span class="property-value">{{ "%.4f"|format(value) }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+document.getElementById('image-upload').addEventListener('change', e => {
+    document.getElementById('file-name-display').textContent = e.target.files[0] ? e.target.files[0].name : 'Pilih file gambar...';
+});
+document.querySelector('.glcm-form').addEventListener('submit', () => {
+    if (document.getElementById('image-upload').files.length > 0) document.getElementById('loading-overlay').style.display = 'flex';
+});
+</script>
 
 {% endblock %}

@@ -37,7 +37,7 @@
                 </a>
             </div>
             <p class="profile-description">
-                Website ini saya buat untuk menyimpan semua Materi dan Tugas untuk Mata Kuiliah Soft Computing.
+                Website ini saya buat untuk menyimpan semua Materi dan Tugas untuk Mata Kuliah Visi Komputer.
             </p>
         </div>
     </aside>
@@ -45,7 +45,7 @@
     <!-- Right Column: Main Content (now with cards) -->
     <main class="profile-main">
         <section class="tasks-section">
-            <h2>Soft Computing</h2>
+            <h2>Visi Komputer</h2>
         </section>
         <div class="project-grid">
             {% for task in tasks %}
@@ -57,7 +57,7 @@
                     <h3 class="card-title">{{ task.title }}</h3>
                     <p class="card-description">{{ task.description }}</p>
                     <div class="card-links">
-                        <a href="{{ url_for('task_detail', task_id=task.id) }}" class="card-link">Baca Materi →</a>
+                        <a href="{{ url_for('task_detail', task_id=task.id) }}" class="card-link">Buka Project →</a>
                     </div>
                 </div>
             </div>

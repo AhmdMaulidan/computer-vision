@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Website Soft Computing{% endblock %}</title>
+    <title>{% block title %}Website Visi Komputer{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.tiny.cloud/1/nvmyoc0zv5a0ynw24f8i93o6gjsn31hpcb8ry63r8ygnyf86/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
 </head>
@@ -19,7 +19,7 @@
         <!-- Tugas/Materi Button is active when the sidebar IS shown -->
         <a href="{{ url_for('tugas') }}" class="nav-item {% if show_sidebar %}active{% endif %}">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-            <span>Materi/Tugas</span>
+            <span>Project</span>
         </a>
 
         <!-- Mode Toggle Button -->
@@ -32,7 +32,7 @@
     <div class="wrapper">
         {% if show_sidebar %}
         <aside class="sidebar">
-            <h1 class="sidebar-title">Soft Computing</h1>
+            <h1 class="sidebar-title">Project</h1>
             <nav class="sidebar-nav">
                 <ul>
                     {% for task_item in tasks %}
