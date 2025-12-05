@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ task.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">{{ task.title }}</h6>
+                </div>
+                <div class="card-body">
+                    {{ task.content|safe }}
+                </div>
+            </div>
+
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Kontrol KNN</h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label for="k_value">Nilai K</label>
+                            <input type="number" class="form-control" id="k_value" name="k_value" value="{{ params.k if params else 3 }}" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dataset">Upload Dataset (CSV)</label>
+                            <input type="file" class="form-control-file" id="dataset" name="dataset" accept=".csv" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Mulai Klasifikasi</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
