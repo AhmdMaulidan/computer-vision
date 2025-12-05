@@ -4,6 +4,12 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.model_selection import train_test_split    
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
+from matplotlib.colors import ListedColormap
 from skimage.feature import graycomatrix, graycoprops
 from skimage.util import view_as_windows
 from flask import Flask, render_template, request, redirect, url_for, flash
@@ -70,8 +76,118 @@ def index():
 def task_detail(task_id):
     task = Task.query.get_or_404(task_id)
     tasks = Task.query.all()
-    
+
+    if task.title == 'K-Nearest Neighbors':
+        if request.method == 'POST':
+            flash('Classification process started...', 'info')
+            if 'dataset' not in request.files or request.files['dataset'].filename == '':
+                flash('No dataset selected. Please upload a CSV file.', 'error')
+                return redirect(request.url)
+            
+            file = request.files['dataset']
+            
+            try:
+                k = int(request.form.get('k_value', '5'))
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                flash(f'File "{filename}" uploaded successfully.', 'info')
+
+                dataset = pd.read_csv(filepath)
+                flash('CSV data loaded successfully.', 'info')
+
+                if dataset.shape[1] < 2:
+                    raise ValueError("Dataset must have at least two columns (features + target).")
+
+                X = dataset.iloc[:, :-1].values
+                y_raw = dataset.iloc[:, -1]
+
+                if pd.api.types.is_string_dtype(y_raw):
+                    flash('Text-based target variable detected. Applying LabelEncoder.', 'info')
+                    le = LabelEncoder()
+                    y = le.fit_transform(y_raw)
+                else:
+                    y = pd.to_numeric(y_raw, errors='coerce')
+                    nan_mask = y.isna()
+                    if nan_mask.any():
+                        flash(f'Warning: Dropped {nan_mask.sum()} rows with non-numeric target values.', 'warning')
+                        X = X[~nan_mask]
+                        y = y[~nan_mask].astype(int)
+
+                if X.shape[0] == 0:
+                    raise ValueError("Dataset is empty after cleaning. Please check your CSV file's target column.")
+
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0)
+                flash('Data split into training and testing sets.', 'info')
+
+                sc = StandardScaler()
+                X_train_scaled = sc.fit_transform(X_train)
+                X_test_scaled = sc.transform(X_test)
+                flash('Features scaled successfully.', 'info')
+
+                classifier = KNeighborsClassifier(n_neighbors=k, metric='minkowski', p=2)
+                classifier.fit(X_train_scaled, y_train)
+                flash('KNN model trained successfully.', 'info')
+
+                y_pred = classifier.predict(X_test_scaled)
+
+                cm = confusion_matrix(y_test, y_pred)
+                accuracy = accuracy_score(y_test, y_pred)
+                report = classification_report(y_test, y_pred)
+
+                plot_url = None
+                if X.shape[1] == 2:
+                    flash('Generating decision boundary plot for 2 features...', 'info')
+                    plt.figure(figsize=(10, 6))
+                    cmap_light = ListedColormap(['#FFAAAA', '#AAFFAA', '#AAAAFF'])
+                    cmap_bold = ['darkred', 'darkgreen', 'darkblue']
+
+                    h = .02
+                    x_min, x_max = X_train_scaled[:, 0].min() - 1, X_train_scaled[:, 0].max() + 1
+                    y_min, y_max = X_train_scaled[:, 1].min() - 1, X_train_scaled[:, 1].max() + 1
+                    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+
+                    Z = classifier.predict(np.c_[xx.ravel(), yy.ravel()])
+                    Z = Z.reshape(xx.shape)
+
+                    plt.contourf(xx, yy, Z, cmap=cmap_light)
+
+                    import seaborn as sns
+                    sns.scatterplot(x=X_train_scaled[:, 0], y=X_train_scaled[:, 1], hue=y_train, palette=cmap_bold, alpha=1.0, edgecolor="black")
+                    plt.title(f'KNN Decision Boundary (K={k})')
+                    plt.xlabel('Feature 1 (Scaled)')
+                    plt.ylabel('Feature 2 (Scaled)')
+
+                    plot_filename = f'knn_plot_{filename}.png'
+                    plot_filepath = os.path.join(app.config['UPLOAD_FOLDER'], plot_filename)
+                    plt.savefig(plot_filepath)
+                    plt.close()
+                    plot_url = url_for('static', filename=f'uploads/{plot_filename}')
+                    flash('Plot generated successfully.', 'info')
+                else:
+                    flash('Decision boundary plot is only available for datasets with 2 features.', 'info')
+
+                return render_template('knn_detail.html', 
+                                    show_sidebar=True, 
+                                    task=task, 
+                                    tasks=tasks,
+                                    results={
+                                        'cm': cm.tolist(),
+                                        'accuracy': accuracy,
+                                        'k': k,
+                                        'report': report,
+                                        'plot_url': plot_url
+                                    },
+                                    params={'k': k})
+
+            except Exception as e:
+                flash(f'An error occurred: {e}', 'error')
+                return redirect(request.url)
+
+        return render_template('knn_detail.html', show_sidebar=True, task=task, tasks=tasks)
+
     if request.method == 'POST':
+        # ... (rest of the GLCM code is unchanged)
         if 'image' not in request.files:
             flash('No image selected', 'error')
             return redirect(request.url)
@@ -127,26 +243,34 @@ def task_detail(task_id):
 
 @app.route('/tugas')
 def tugas():
-    first_task = Task.query.first()
-    if first_task: return redirect(url_for('task_detail', task_id=first_task.id))
-    else: flash('No project created yet.', 'info'); return redirect(url_for('index'))
+    tasks = Task.query.all()
+    return render_template('tugas.html', show_sidebar=True, tasks=tasks)
 
 def setup_database(app):
     with app.app_context():
         db.drop_all()
         db.create_all()
-        if not Task.query.first():
-            glcm_task = Task(
-                title='Gray-Level Co-occurrence Matrix',
-                thumbnail='assets/glcmthumnail.png', 
-                description='Analisis tekstur citra menggunakan GLCM untuk ekstraksi fitur.',
-                content='''
-<p>Alat ini melakukan analisis tekstur lokal pada gambar menggunakan metode <strong>GLCM</strong>. Proses ini memindai gambar dengan 'jendela geser' untuk menghasilkan <strong>peta fitur (feature maps)</strong> yang menunjukkan bagaimana properti tekstur seperti Kontras, Korelasi, Energi, dan Homogenitas didistribusikan di seluruh gambar.</p>
+        glcm_task = Task(
+            title='Gray-Level Co-occurrence Matrix',
+            thumbnail='assets/glcmthumnail.png', 
+            description='Analisis tekstur citra menggunakan GLCM untuk ekstraksi fitur.',
+            content='''
+<p>Alat ini melakukan analisis tekstur lokal pada gambar menggunakan metode <strong>GLCM</strong>. Proses ini memindai gambar dengan \'jendela geser\' untuk menghasilkan <strong>peta fitur (feature maps)</strong> yang menunjukkan bagaimana properti tekstur seperti Kontras, Korelasi, Energi, dan Homogenitas didistribusikan di seluruh gambar.</p>
 <p>Unggah gambar, pilih parameter analisis, dan lihat bagaimana setiap piksel pada peta hasil mewakili tekstur dari area lokal di sekitarnya pada gambar asli.</p>
 '''
-            )
-            db.session.add(glcm_task)
-            db.session.commit()
+        )
+        db.session.add(glcm_task)
+        knn_task = Task(
+            title='K-Nearest Neighbors',
+            thumbnail='assets/knnthumnail.png',
+            description='Klasifikasi data menggunakan algoritma KNN.',
+            content='''
+<p>Alat ini melakukan klasifikasi data menggunakan metode <strong>K-Nearest Neighbors (KNN)</strong>. KNN adalah algoritma supervised learning yang digunakan untuk klasifikasi dan regresi. Dalam kasus ini, kita akan menggunakannya untuk klasifikasi.</p>
+<p>Unggah dataset Anda (dengan 2 fitur untuk visualisasi), tentukan jumlah tetangga (K), dan lihat bagaimana data baru diklasifikasikan berdasarkan mayoritas kelas dari K tetangga terdekatnya.</p>
+'''
+        )
+        db.session.add(knn_task)
+        db.session.commit()
 
 setup_database(app)
 

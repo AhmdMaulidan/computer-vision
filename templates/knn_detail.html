@@ -23,17 +23,76 @@
                     <form method="POST" enctype="multipart/form-data">
                         <div class="form-group">
                             <label for="k_value">Nilai K</label>
-                            <input type="number" class="form-control" id="k_value" name="k_value" value="{{ params.k if params else 3 }}" min="1" required>
+                            <input type="number" class="form-control number-input" id="k_value" name="k_value" value="{{ params.k if params else 5 }}" min="1" required>
                         </div>
                         <div class="form-group">
                             <label for="dataset">Upload Dataset (CSV)</label>
-                            <input type="file" class="form-control-file" id="dataset" name="dataset" accept=".csv" required>
+                            <label for="dataset" class="custom-file-upload" id="dataset-label">Pilih file...</label>
+                            <input type="file" id="dataset" name="dataset" accept=".csv" style="display: none;">
                         </div>
-                        <button type="submit" class="btn btn-primary">Mulai Klasifikasi</button>
+                        <button type="submit" class="btn btn-primary btn-submit">Mulai Klasifikasi</button>
                     </form>
                 </div>
             </div>
+
+            {% if results %}
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Hasil Klasifikasi (K={{ results.k }})</h6>
+                </div>
+                <div class="card-body">
+                    {% if results.plot_url %}
+                    <h6>Decision Boundary</h6>
+                    <img src="{{ results.plot_url }}" class="img-fluid mb-4" alt="KNN Decision Boundary Plot">
+                    {% endif %}
+
+                    <h6>Laporan Klasifikasi</h6>
+                    <pre>{{ results.report }}</pre>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Confusion Matrix</h6>
+                            <table class="table table-bordered text-center">
+                                <tbody>
+                                    {% for row in results.cm %}
+                                    <tr>
+                                        {% for cell in row %}
+                                        <td>{{ cell }}</td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Akurasi</h6>
+                            <div class="card bg-primary text-white h-100">
+                                <div class="card-body d-flex align-items-center justify-content-center">
+                                    <h2 class="display-4">{{ "%.2f"|format(results.accuracy * 100) }}%</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const fileInput = document.getElementById('dataset');
+    if (fileInput) {
+        const fileLabel = document.getElementById('dataset-label');
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                fileLabel.textContent = fileInput.files[0].name;
+            } else {
+                fileLabel.textContent = 'Pilih file...';
+            }
+        });
+    }
+</script>
 {% endblock %}

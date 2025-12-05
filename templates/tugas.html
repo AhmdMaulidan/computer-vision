@@ -5,5 +5,22 @@
 {% block header %}Project{% endblock %}
 
 {% block content %}
-<p>Mengarahkan ke halaman project...</p>
+<div class="project-grid">
+    {% for task in tasks %}
+    <div class="project-card">
+        <div class="card-image">
+            <img src="{{ url_for('static', filename=task.thumbnail) }}" alt="{{ task.title }}">
+        </div>
+        <div class="card-content">
+            <h3 class="card-title">{{ task.title }}</h3>
+            <p class="card-description">{{ task.description }}</p>
+            <div class="card-links">
+                <a href="{{ url_for('task_detail', task_id=task.id) }}" class="card-link">Buka Project →</a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <p>Belum ada tugas yang ditambahkan.</p>
+    {% endfor %}
+</div>
 {% endblock %}
