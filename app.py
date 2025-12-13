@@ -259,79 +259,163 @@ def task_detail(task_id):
                               params={'k': 5})
 
     if task.title == 'Naive Bayes':
-        # Hardcoded Play Tennis Dataset
-        data = {
-            'Outlook': ['Sunny', 'Sunny', 'Overcast', 'Rain', 'Rain', 'Rain', 'Overcast', 'Sunny', 'Sunny', 'Rain', 'Sunny', 'Overcast', 'Overcast', 'Rain'],
-            'Temperature': ['Hot', 'Hot', 'Hot', 'Mild', 'Cool', 'Cool', 'Cool', 'Mild', 'Cool', 'Mild', 'Mild', 'Mild', 'Hot', 'Mild'],
-            'Humidity': ['High', 'High', 'High', 'High', 'Normal', 'Normal', 'Normal', 'High', 'Normal', 'Normal', 'Normal', 'High', 'Normal', 'High'],
-            'Wind': ['Weak', 'Strong', 'Weak', 'Weak', 'Weak', 'Strong', 'Strong', 'Weak', 'Weak', 'Weak', 'Strong', 'Strong', 'Weak', 'Strong'],
-            'Play': ['No', 'No', 'Yes', 'Yes', 'Yes', 'No', 'Yes', 'No', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'No']
-        }
-        df = pd.DataFrame(data)
-
-        # Encoders for categorical data
-        le_outlook = LabelEncoder()
-        le_temp = LabelEncoder()
-        le_humidity = LabelEncoder()
-        le_wind = LabelEncoder()
-        le_play = LabelEncoder()
-
-        # Fit and transform the dataset
-        df['Outlook_n'] = le_outlook.fit_transform(df['Outlook'])
-        df['Temperature_n'] = le_temp.fit_transform(df['Temperature'])
-        df['Humidity_n'] = le_humidity.fit_transform(df['Humidity'])
-        df['Wind_n'] = le_wind.fit_transform(df['Wind'])
-        df['Play_n'] = le_play.fit_transform(df['Play'])
-
-        # Features and Target
-        X = df[['Outlook_n', 'Temperature_n', 'Humidity_n', 'Wind_n']]
-        y = df['Play_n']
-
-        # Train Model
-        model = GaussianNB()
-        model.fit(X, y)
-
+        # Manual upload like KNN
+        dataset = None
+        results = None
         prediction_result = None
         probs = None
-
+        feature_names = ['Gender', 'Age', 'EstimatedSalary']
+        
         if request.method == 'POST':
-            try:
-                # Get form data
-                outlook_input = request.form.get('outlook')
-                temp_input = request.form.get('temperature')
-                humidity_input = request.form.get('humidity')
-                wind_input = request.form.get('wind')
-
-                # Encode inputs
-                # Note: We need to handle potential unseen labels if user modifies form, 
-                # but with fixed select options it should be fine.
-                input_data = [[
-                    le_outlook.transform([outlook_input])[0],
-                    le_temp.transform([temp_input])[0],
-                    le_humidity.transform([humidity_input])[0],
-                    le_wind.transform([wind_input])[0]
-                ]]
-
-                # Predict
-                pred_n = model.predict(input_data)[0]
-                pred_prob = model.predict_proba(input_data)[0]
+            action = request.form.get('action', 'upload')
+            
+            if action == 'upload':
+                # Handle file upload
+                if 'dataset' not in request.files or request.files['dataset'].filename == '':
+                    flash('Pilih file CSV untuk di-upload.', 'error')
+                    return redirect(request.url)
                 
-                prediction_result = le_play.inverse_transform([pred_n])[0]
-                probs = {
-                    le_play.inverse_transform([0])[0]: f"{pred_prob[0]*100:.2f}%",
-                    le_play.inverse_transform([1])[0]: f"{pred_prob[1]*100:.2f}%"
-                }
+                file = request.files['dataset']
                 
-                flash(f'Prediction: {prediction_result}', 'success')
-
-            except Exception as e:
-                flash(f'Error during prediction: {e}', 'error')
-
+                try:
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    
+                    # Read and validate dataset
+                    df = pd.read_csv(filepath)
+                    
+                    # Check if dataset has expected columns
+                    if 'Purchased' not in df.columns:
+                        raise ValueError("Dataset harus memiliki kolom 'Purchased' sebagai target.")
+                    
+                    missing_cols = [col for col in feature_names if col not in df.columns]
+                    if missing_cols:
+                        raise ValueError(f"Dataset tidak memiliki kolom: {', '.join(missing_cols)}")
+                    
+                    flash(f'Dataset "{filename}" berhasil di-upload dengan {len(df)} data.', 'success')
+                    
+                    # Prepare dataset for display (all rows)
+                    dataset = {
+                        'Gender': df['Gender'].tolist(),
+                        'Age': df['Age'].tolist(),
+                        'EstimatedSalary': df['EstimatedSalary'].tolist(),
+                        'Purchased': df['Purchased'].tolist()
+                    }
+                    
+                    # Train model
+                    le_gender = LabelEncoder()
+                    df['Gender_n'] = le_gender.fit_transform(df['Gender'])
+                    
+                    X = df[['Gender_n', 'Age', 'EstimatedSalary']].values
+                    y = df['Purchased'].values
+                    
+                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+                    
+                    scaler = StandardScaler()
+                    X_train_scaled = scaler.fit_transform(X_train)
+                    X_test_scaled = scaler.transform(X_test)
+                    
+                    model = GaussianNB()
+                    model.fit(X_train_scaled, y_train)
+                    
+                    y_pred = model.predict(X_test_scaled)
+                    cm = confusion_matrix(y_test, y_pred)
+                    accuracy = accuracy_score(y_test, y_pred)
+                    report = classification_report(y_test, y_pred, target_names=['Tidak Membeli', 'Membeli'])
+                    
+                    results = {
+                        'cm': cm.tolist(),
+                        'accuracy': accuracy,
+                        'report': report,
+                        'total_data': len(df)
+                    }
+                    
+                    # Store model info in session for prediction
+                    from flask import session
+                    session['nb_dataset_path'] = filepath
+                    
+                except Exception as e:
+                    flash(f'Error: {e}', 'error')
+                    return redirect(request.url)
+                    
+            elif action == 'predict':
+                # Handle prediction
+                from flask import session
+                filepath = session.get('nb_dataset_path')
+                
+                if not filepath or not os.path.exists(filepath):
+                    flash('Upload dataset terlebih dahulu sebelum prediksi.', 'error')
+                    return redirect(request.url)
+                
+                try:
+                    # Reload dataset and retrain
+                    df = pd.read_csv(filepath)
+                    dataset = {
+                        'Gender': df['Gender'].tolist(),
+                        'Age': df['Age'].tolist(),
+                        'EstimatedSalary': df['EstimatedSalary'].tolist(),
+                        'Purchased': df['Purchased'].tolist()
+                    }
+                    
+                    le_gender = LabelEncoder()
+                    df['Gender_n'] = le_gender.fit_transform(df['Gender'])
+                    
+                    X = df[['Gender_n', 'Age', 'EstimatedSalary']].values
+                    y = df['Purchased'].values
+                    
+                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+                    
+                    scaler = StandardScaler()
+                    X_train_scaled = scaler.fit_transform(X_train)
+                    X_test_scaled = scaler.transform(X_test)
+                    
+                    model = GaussianNB()
+                    model.fit(X_train_scaled, y_train)
+                    
+                    y_pred = model.predict(X_test_scaled)
+                    cm = confusion_matrix(y_test, y_pred)
+                    accuracy = accuracy_score(y_test, y_pred)
+                    report = classification_report(y_test, y_pred, target_names=['Tidak Membeli', 'Membeli'])
+                    
+                    results = {
+                        'cm': cm.tolist(),
+                        'accuracy': accuracy,
+                        'report': report,
+                        'total_data': len(df)
+                    }
+                    
+                    # Get prediction input
+                    gender_input = request.form.get('gender')
+                    age_input = float(request.form.get('age'))
+                    salary_input = float(request.form.get('salary'))
+                    
+                    # Encode and scale
+                    gender_encoded = le_gender.transform([gender_input])[0]
+                    input_data = [[gender_encoded, age_input, salary_input]]
+                    input_scaled = scaler.transform(input_data)
+                    
+                    pred = model.predict(input_scaled)[0]
+                    pred_prob = model.predict_proba(input_scaled)[0]
+                    
+                    prediction_result = 'Yes' if pred == 1 else 'No'
+                    probs = {
+                        'No': f"{pred_prob[0]*100:.2f}%",
+                        'Yes': f"{pred_prob[1]*100:.2f}%"
+                    }
+                    
+                    flash(f'Prediksi: {"Membeli" if pred == 1 else "Tidak Membeli"}', 'success')
+                    
+                except Exception as e:
+                    flash(f'Error: {e}', 'error')
+                    return redirect(request.url)
+        
         return render_template('naive_bayes_detail.html', 
                              show_sidebar=True, 
                              task=task, 
                              tasks=tasks,
-                             dataset=data,
+                             dataset=dataset,
+                             results=results,
                              prediction=prediction_result,
                              probs=probs)
 
@@ -526,10 +610,16 @@ def setup_database(app):
         nb_task = Task(
             title='Naive Bayes',
             thumbnail='assets/nbthumbnail.png',
-            description='Klasifikasi data menggunakan algoritma Naive Bayes.',
+            description='Prediksi perilaku pembelian customer menggunakan algoritma Naive Bayes.',
             content='''
-<p>Alat ini melakukan klasifikasi data menggunakan metode <strong>Naive Bayes</strong>. Naive Bayes adalah algoritma klasifikasi probabilistik berdasarkan Teorema Bayes dengan asumsi independensi yang kuat antar fitur.</p>
-<p>Unggah dataset Anda (dengan 2 fitur untuk visualisasi), dan lihat bagaimana data diklasifikasikan menggunakan distribusi Gaussian.</p>
+<p>Alat ini melakukan klasifikasi data menggunakan metode <strong>Naive Bayes</strong> dengan dataset <strong>Customer Behaviour</strong>.</p>
+<p><strong>Fitur yang digunakan:</strong></p>
+<ul>
+<li><strong>Gender</strong>: Jenis kelamin customer (Male/Female)</li>
+<li><strong>Age</strong>: Usia customer</li>
+<li><strong>Estimated Salary</strong>: Estimasi gaji customer</li>
+</ul>
+<p>Model akan memprediksi apakah customer akan melakukan pembelian atau tidak berdasarkan profil tersebut.</p>
 '''
         )
         db.session.add(nb_task)
