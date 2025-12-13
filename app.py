@@ -81,113 +81,182 @@ def task_detail(task_id):
     tasks = Task.query.all()
 
     if task.title == 'K-Nearest Neighbors':
+        # Check if there's a trained model in session (via uploaded dataset)
+        dataset = None
+        results = None
+        prediction_result = None
+        probs = None
+        feature_names = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 
+                        'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age']
+        
         if request.method == 'POST':
-            flash('Classification process started...', 'info')
-            if 'dataset' not in request.files or request.files['dataset'].filename == '':
-                flash('No dataset selected. Please upload a CSV file.', 'error')
-                return redirect(request.url)
+            action = request.form.get('action', 'upload')
+            k = int(request.form.get('k_value', '5'))
             
-            file = request.files['dataset']
-            
-            try:
-                k = int(request.form.get('k_value', '5'))
-                filename = secure_filename(file.filename)
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(filepath)
-                flash(f'File "{filename}" uploaded successfully.', 'info')
-
-                dataset = pd.read_csv(filepath)
-                flash('CSV data loaded successfully.', 'info')
-
-                if dataset.shape[1] < 2:
-                    raise ValueError("Dataset must have at least two columns (features + target).")
-
-                X = dataset.iloc[:, :-1].values
-                y_raw = dataset.iloc[:, -1]
-
-                if pd.api.types.is_string_dtype(y_raw):
-                    flash('Text-based target variable detected. Applying LabelEncoder.', 'info')
-                    le = LabelEncoder()
-                    y = le.fit_transform(y_raw)
-                else:
-                    y = pd.to_numeric(y_raw, errors='coerce')
-                    nan_mask = y.isna()
-                    if nan_mask.any():
-                        flash(f'Warning: Dropped {nan_mask.sum()} rows with non-numeric target values.', 'warning')
-                        X = X[~nan_mask]
-                        y = y[~nan_mask].astype(int)
-
-                if X.shape[0] == 0:
-                    raise ValueError("Dataset is empty after cleaning. Please check your CSV file's target column.")
-
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0)
-                flash('Data split into training and testing sets.', 'info')
-
-                sc = StandardScaler()
-                X_train_scaled = sc.fit_transform(X_train)
-                X_test_scaled = sc.transform(X_test)
-                flash('Features scaled successfully.', 'info')
-
-                classifier = KNeighborsClassifier(n_neighbors=k, metric='minkowski', p=2)
-                classifier.fit(X_train_scaled, y_train)
-                flash('KNN model trained successfully.', 'info')
-
-                y_pred = classifier.predict(X_test_scaled)
-
-                cm = confusion_matrix(y_test, y_pred)
-                accuracy = accuracy_score(y_test, y_pred)
-                report = classification_report(y_test, y_pred)
-
-                plot_url = None
-                if X.shape[1] == 2:
-                    flash('Generating decision boundary plot for 2 features...', 'info')
-                    plt.figure(figsize=(10, 6))
-                    cmap_light = ListedColormap(['#FFAAAA', '#AAFFAA', '#AAAAFF'])
-                    cmap_bold = ['darkred', 'darkgreen', 'darkblue']
-
-                    h = .02
-                    x_min, x_max = X_train_scaled[:, 0].min() - 1, X_train_scaled[:, 0].max() + 1
-                    y_min, y_max = X_train_scaled[:, 1].min() - 1, X_train_scaled[:, 1].max() + 1
-                    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
-
-                    Z = classifier.predict(np.c_[xx.ravel(), yy.ravel()])
-                    Z = Z.reshape(xx.shape)
-
-                    plt.contourf(xx, yy, Z, cmap=cmap_light)
-
-                    import seaborn as sns
-                    sns.scatterplot(x=X_train_scaled[:, 0], y=X_train_scaled[:, 1], hue=y_train, palette=cmap_bold, alpha=1.0, edgecolor="black")
-                    plt.title(f'KNN Decision Boundary (K={k})')
-                    plt.xlabel('Feature 1 (Scaled)')
-                    plt.ylabel('Feature 2 (Scaled)')
-
-                    plot_filename = f'knn_plot_{filename}.png'
-                    plot_filepath = os.path.join(app.config['UPLOAD_FOLDER'], plot_filename)
-                    plt.savefig(plot_filepath)
-                    plt.close()
-                    plot_url = url_for('static', filename=f'uploads/{plot_filename}')
-                    flash('Plot generated successfully.', 'info')
-                else:
-                    flash('Decision boundary plot is only available for datasets with 2 features.', 'info')
-
-                return render_template('knn_detail.html', 
-                                    show_sidebar=True, 
-                                    task=task, 
-                                    tasks=tasks,
-                                    results={
-                                        'cm': cm.tolist(),
-                                        'accuracy': accuracy,
-                                        'k': k,
-                                        'report': report,
-                                        'plot_url': plot_url
-                                    },
-                                    params={'k': k})
-
-            except Exception as e:
-                flash(f'An error occurred: {e}', 'error')
-                return redirect(request.url)
-
-        return render_template('knn_detail.html', show_sidebar=True, task=task, tasks=tasks)
+            if action == 'upload':
+                # Handle file upload
+                if 'dataset' not in request.files or request.files['dataset'].filename == '':
+                    flash('Pilih file CSV untuk di-upload.', 'error')
+                    return redirect(request.url)
+                
+                file = request.files['dataset']
+                
+                try:
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    
+                    # Read and validate dataset
+                    df = pd.read_csv(filepath)
+                    
+                    # Check if dataset has expected columns
+                    if 'Outcome' not in df.columns:
+                        raise ValueError("Dataset harus memiliki kolom 'Outcome' sebagai target.")
+                    
+                    missing_cols = [col for col in feature_names if col not in df.columns]
+                    if missing_cols:
+                        raise ValueError(f"Dataset tidak memiliki kolom: {', '.join(missing_cols)}")
+                    
+                    flash(f'Dataset "{filename}" berhasil di-upload dengan {len(df)} data.', 'success')
+                    
+                    # Prepare dataset for display
+                    dataset = {col: df[col].tolist()[:10] for col in feature_names + ['Outcome']}
+                    
+                    # Train model
+                    X = df[feature_names].values
+                    y = df['Outcome'].values
+                    
+                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+                    
+                    sc = StandardScaler()
+                    X_train_scaled = sc.fit_transform(X_train)
+                    X_test_scaled = sc.transform(X_test)
+                    
+                    classifier = KNeighborsClassifier(n_neighbors=k, metric='minkowski', p=2)
+                    classifier.fit(X_train_scaled, y_train)
+                    
+                    y_pred = classifier.predict(X_test_scaled)
+                    cm = confusion_matrix(y_test, y_pred)
+                    accuracy = accuracy_score(y_test, y_pred)
+                    report = classification_report(y_test, y_pred, target_names=['Tidak Diabetes', 'Diabetes'])
+                    
+                    results = {
+                        'cm': cm.tolist(),
+                        'accuracy': accuracy,
+                        'k': k,
+                        'report': report
+                    }
+                    
+                    # Store model info in session for prediction
+                    # We'll use a simple approach: store filepath for re-training
+                    from flask import session
+                    session['knn_dataset_path'] = filepath
+                    session['knn_k'] = k
+                    
+                except Exception as e:
+                    flash(f'Error: {e}', 'error')
+                    return redirect(request.url)
+                    
+            elif action == 'predict':
+                # Handle prediction
+                from flask import session
+                filepath = session.get('knn_dataset_path')
+                
+                if not filepath or not os.path.exists(filepath):
+                    flash('Upload dataset terlebih dahulu sebelum prediksi.', 'error')
+                    return redirect(request.url)
+                
+                try:
+                    # Reload dataset and retrain
+                    df = pd.read_csv(filepath)
+                    dataset = {col: df[col].tolist()[:10] for col in feature_names + ['Outcome']}
+                    
+                    X = df[feature_names].values
+                    y = df['Outcome'].values
+                    
+                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+                    
+                    sc = StandardScaler()
+                    X_train_scaled = sc.fit_transform(X_train)
+                    X_test_scaled = sc.transform(X_test)
+                    
+                    classifier = KNeighborsClassifier(n_neighbors=k, metric='minkowski', p=2)
+                    classifier.fit(X_train_scaled, y_train)
+                    
+                    y_pred = classifier.predict(X_test_scaled)
+                    cm = confusion_matrix(y_test, y_pred)
+                    accuracy = accuracy_score(y_test, y_pred)
+                    report = classification_report(y_test, y_pred, target_names=['Tidak Diabetes', 'Diabetes'])
+                    
+                    results = {
+                        'cm': cm.tolist(),
+                        'accuracy': accuracy,
+                        'k': k,
+                        'report': report
+                    }
+                    
+                    # Get prediction input and store them
+                    pregnancies = float(request.form.get('pregnancies', 0))
+                    glucose = float(request.form.get('glucose', 0))
+                    blood_pressure = float(request.form.get('blood_pressure', 0))
+                    skin_thickness = float(request.form.get('skin_thickness', 0))
+                    insulin = float(request.form.get('insulin', 0))
+                    bmi = float(request.form.get('bmi', 0))
+                    diabetes_pedigree = float(request.form.get('diabetes_pedigree', 0))
+                    age = float(request.form.get('age', 0))
+                    
+                    # Store input values to pass back to template
+                    input_values = {
+                        'pregnancies': pregnancies,
+                        'glucose': glucose,
+                        'blood_pressure': blood_pressure,
+                        'skin_thickness': skin_thickness,
+                        'insulin': insulin,
+                        'bmi': bmi,
+                        'diabetes_pedigree': diabetes_pedigree,
+                        'age': age
+                    }
+                    
+                    input_data = [[pregnancies, glucose, blood_pressure, skin_thickness, 
+                                  insulin, bmi, diabetes_pedigree, age]]
+                    input_scaled = sc.transform(input_data)
+                    
+                    pred = classifier.predict(input_scaled)[0]
+                    pred_prob = classifier.predict_proba(input_scaled)[0]
+                    
+                    prediction_result = 'Diabetes' if pred == 1 else 'Tidak Diabetes'
+                    probs = {
+                        'Tidak Diabetes': f"{pred_prob[0]*100:.2f}%",
+                        'Diabetes': f"{pred_prob[1]*100:.2f}%"
+                    }
+                    
+                    flash(f'Prediksi: {prediction_result}', 'success')
+                    
+                    # Return with input values preserved
+                    return render_template('knn_detail.html', 
+                                          show_sidebar=True, 
+                                          task=task, 
+                                          tasks=tasks,
+                                          dataset=dataset,
+                                          results=results,
+                                          prediction=prediction_result,
+                                          probs=probs,
+                                          params={'k': k},
+                                          input_values=input_values)
+                    
+                except Exception as e:
+                    flash(f'Error: {e}', 'error')
+                    return redirect(request.url)
+        
+        return render_template('knn_detail.html', 
+                              show_sidebar=True, 
+                              task=task, 
+                              tasks=tasks,
+                              dataset=dataset,
+                              results=results,
+                              prediction=prediction_result,
+                              probs=probs,
+                              params={'k': 5})
 
     if task.title == 'Naive Bayes':
         # Hardcoded Play Tennis Dataset
@@ -442,10 +511,15 @@ def setup_database(app):
         knn_task = Task(
             title='K-Nearest Neighbors',
             thumbnail='assets/knnthumnail.png',
-            description='Klasifikasi data menggunakan algoritma KNN.',
+            description='Klasifikasi dan prediksi diabetes menggunakan algoritma KNN.',
             content='''
-<p>Alat ini melakukan klasifikasi data menggunakan metode <strong>K-Nearest Neighbors (KNN)</strong>. KNN adalah algoritma supervised learning yang digunakan untuk klasifikasi dan regresi. Dalam kasus ini, kita akan menggunakannya untuk klasifikasi.</p>
-<p>Unggah dataset Anda (dengan 2 fitur untuk visualisasi), tentukan jumlah tetangga (K), dan lihat bagaimana data baru diklasifikasikan berdasarkan mayoritas kelas dari K tetangga terdekatnya.</p>
+<p>Alat ini melakukan klasifikasi data menggunakan metode <strong>K-Nearest Neighbors (KNN)</strong> dengan dataset <strong>Pima Indians Diabetes</strong>.</p>
+<p><strong>Langkah penggunaan:</strong></p>
+<ol>
+<li>Upload file CSV dataset diabetes (dengan kolom: Pregnancies, Glucose, BloodPressure, SkinThickness, Insulin, BMI, DiabetesPedigreeFunction, Age, Outcome)</li>
+<li>Tentukan nilai K untuk algoritma KNN</li>
+<li>Setelah model terlatih, masukkan nilai-nilai medis untuk memprediksi apakah seseorang berisiko terkena diabetes</li>
+</ol>
 '''
         )
         db.session.add(knn_task)
