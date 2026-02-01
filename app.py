@@ -420,104 +420,295 @@ def task_detail(task_id):
                              probs=probs)
 
     if task.title == 'Decision Tree':
-        # Hardcoded Iris Dataset (like Naive Bayes with Play Tennis)
-        iris = load_iris()
-        
-        # Create DataFrame for display
-        data = {
-            'Sepal Length': iris.data[:, 0].tolist(),
-            'Sepal Width': iris.data[:, 1].tolist(),
-            'Petal Length': iris.data[:, 2].tolist(),
-            'Petal Width': iris.data[:, 3].tolist(),
-            'Species': [iris.target_names[t] for t in iris.target]
-        }
-        df = pd.DataFrame(data)
-        
-        # Prepare features and target
-        X = iris.data
-        y = iris.target
-        feature_names = ['Sepal Length', 'Sepal Width', 'Petal Length', 'Petal Width']
-        class_names = iris.target_names.tolist()
-        
-        # Train Decision Tree
-        clf = DecisionTreeClassifier(criterion='gini', random_state=42)
-        clf.fit(X, y)
-        
-        # Generate Tree Visualization
-        plt.figure(figsize=(16, 10))
-        plot_tree(clf, filled=True, feature_names=feature_names, 
-                 class_names=class_names, rounded=True, fontsize=9)
-        tree_filename = 'decision_tree_iris.png'
-        tree_filepath = os.path.join(app.config['UPLOAD_FOLDER'], tree_filename)
-        plt.tight_layout()
-        plt.savefig(tree_filepath, dpi=150, bbox_inches='tight')
-        plt.close()
-        tree_url = url_for('static', filename=f'uploads/{tree_filename}')
-        
-        # Generate Decision Boundary (using first 2 features)
-        X_2d = X[:, :2]
-        clf_2d = DecisionTreeClassifier(criterion='gini', random_state=42)
-        clf_2d.fit(X_2d, y)
-        
-        plt.figure(figsize=(10, 6))
-        x_min, x_max = X_2d[:, 0].min() - 1, X_2d[:, 0].max() + 1
-        y_min, y_max = X_2d[:, 1].min() - 1, X_2d[:, 1].max() + 1
-        xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.02),
-                           np.arange(y_min, y_max, 0.02))
-        Z = clf_2d.predict(np.c_[xx.ravel(), yy.ravel()])
-        Z = Z.reshape(xx.shape)
-        
-        cmap_light = ListedColormap(['#FFAAAA', '#AAFFAA', '#AAAAFF'])
-        colors_bold = ['#FF0000', '#00FF00', '#0000FF']
-        
-        plt.contourf(xx, yy, Z, cmap=cmap_light, alpha=0.8)
-        for idx, cls in enumerate(class_names):
-            mask = y == idx
-            plt.scatter(X_2d[mask, 0], X_2d[mask, 1], c=colors_bold[idx], 
-                       label=cls, edgecolor='black', s=50)
-        plt.title('Decision Boundary (Sepal Length vs Sepal Width)')
-        plt.xlabel(feature_names[0])
-        plt.ylabel(feature_names[1])
-        plt.legend()
-        
-        boundary_filename = 'dt_boundary_iris.png'
-        boundary_filepath = os.path.join(app.config['UPLOAD_FOLDER'], boundary_filename)
-        plt.savefig(boundary_filepath)
-        plt.close()
-        boundary_url = url_for('static', filename=f'uploads/{boundary_filename}')
-        
+        # Manual upload like KNN
+        dataset = None
+        results = None
         prediction_result = None
         probs = None
+        tree_url = None
+        boundary_url = None
+        dropdown_options = None
+        feature_cols = None
+        target_col = None
         
         if request.method == 'POST':
-            try:
-                # Get form data
-                sepal_length = float(request.form.get('sepal_length'))
-                sepal_width = float(request.form.get('sepal_width'))
-                petal_length = float(request.form.get('petal_length'))
-                petal_width = float(request.form.get('petal_width'))
+            action = request.form.get('action', 'upload')
+            
+            if action == 'upload':
+                # Handle file upload
+                if 'dataset' not in request.files or request.files['dataset'].filename == '':
+                    flash('Pilih file CSV untuk di-upload.', 'error')
+                    return redirect(request.url)
                 
-                input_data = [[sepal_length, sepal_width, petal_length, petal_width]]
-                pred = clf.predict(input_data)[0]
-                pred_prob = clf.predict_proba(input_data)[0]
+                file = request.files['dataset']
                 
-                prediction_result = class_names[pred]
-                probs = {class_names[i]: f"{p*100:.2f}%" for i, p in enumerate(pred_prob)}
+                try:
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    
+                    # Read dataset
+                    df = pd.read_csv(filepath)
+                    df = df.dropna()
+                    
+                    # Assume last column is target, rest are features
+                    columns = df.columns.tolist()
+                    feature_cols = columns[:-1]
+                    target_col = columns[-1]
+                    
+                    flash(f'Dataset "{filename}" berhasil di-upload dengan {len(df)} data.', 'success')
+                    
+                    # Prepare dataset for display (all data)
+                    dataset = {col: df[col].tolist() for col in columns}
+                    
+                    # Encode all categorical columns
+                    label_encoders = {}
+                    encoded_cols = []
+                    for col in feature_cols:
+                        if df[col].dtype == 'object' or df[col].dtype.name == 'bool':
+                            le = LabelEncoder()
+                            df[f'{col}_n'] = le.fit_transform(df[col].astype(str))
+                            label_encoders[col] = le
+                            encoded_cols.append(f'{col}_n')
+                        else:
+                            encoded_cols.append(col)
+                    
+                    # Encode target
+                    le_target = LabelEncoder()
+                    df[f'{target_col}_n'] = le_target.fit_transform(df[target_col].astype(str))
+                    label_encoders[target_col] = le_target
+                    
+                    # Prepare features and target
+                    X = df[encoded_cols].values
+                    y = df[f'{target_col}_n'].values
+                    class_names = le_target.classes_.tolist()
+                    
+                    # Get unique values for dropdowns
+                    dropdown_options = {}
+                    for col in feature_cols:
+                        dropdown_options[col] = df[col].unique().tolist()
+                    
+                    # Train Decision Tree
+                    clf = DecisionTreeClassifier(criterion='entropy', random_state=42)
+                    clf.fit(X, y)
+                    
+                    # Calculate accuracy metrics
+                    y_pred = clf.predict(X)
+                    cm = confusion_matrix(y, y_pred)
+                    accuracy = accuracy_score(y, y_pred)
+                    report = classification_report(y, y_pred, target_names=[str(c) for c in class_names])
+                    
+                    results = {
+                        'cm': cm.tolist(),
+                        'accuracy': accuracy,
+                        'report': report,
+                        'total_data': len(df),
+                        'feature_cols': feature_cols,
+                        'target_col': target_col
+                    }
+                    
+                    # Generate Tree Visualization
+                    plt.figure(figsize=(20, 12))
+                    plot_tree(clf, filled=True, feature_names=feature_cols, 
+                             class_names=[str(c) for c in class_names], rounded=True, fontsize=10)
+                    tree_filename = 'decision_tree_uploaded.png'
+                    tree_filepath = os.path.join(app.config['UPLOAD_FOLDER'], tree_filename)
+                    plt.tight_layout()
+                    plt.savefig(tree_filepath, dpi=150, bbox_inches='tight')
+                    plt.close()
+                    tree_url = url_for('static', filename=f'uploads/{tree_filename}')
+                    
+                    # Generate Decision Boundary (using first 2 features)
+                    if len(feature_cols) >= 2:
+                        X_2d = X[:, :2]
+                        clf_2d = DecisionTreeClassifier(criterion='entropy', random_state=42)
+                        clf_2d.fit(X_2d, y)
+                        
+                        plt.figure(figsize=(10, 6))
+                        x_min, x_max = X_2d[:, 0].min() - 0.5, X_2d[:, 0].max() + 0.5
+                        y_min, y_max = X_2d[:, 1].min() - 0.5, X_2d[:, 1].max() + 0.5
+                        xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.02),
+                                           np.arange(y_min, y_max, 0.02))
+                        Z = clf_2d.predict(np.c_[xx.ravel(), yy.ravel()])
+                        Z = Z.reshape(xx.shape)
+                        
+                        # Generate colors based on number of classes
+                        n_classes = len(class_names)
+                        colors_light = ['#FFAAAA', '#AAFFAA', '#AAAAFF', '#FFFFAA', '#FFAAFF', '#AAFFFF'][:n_classes]
+                        colors_bold = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'][:n_classes]
+                        
+                        cmap_light = ListedColormap(colors_light)
+                        
+                        plt.contourf(xx, yy, Z, cmap=cmap_light, alpha=0.8)
+                        for idx, cls in enumerate(class_names):
+                            mask = y == idx
+                            plt.scatter(X_2d[mask, 0], X_2d[mask, 1], c=colors_bold[idx], 
+                                       label=str(cls), edgecolor='black', s=80)
+                        plt.title(f'Decision Boundary ({feature_cols[0]} vs {feature_cols[1]})')
+                        plt.xlabel(feature_cols[0])
+                        plt.ylabel(feature_cols[1])
+                        plt.legend()
+                        
+                        boundary_filename = 'dt_boundary_uploaded.png'
+                        boundary_filepath = os.path.join(app.config['UPLOAD_FOLDER'], boundary_filename)
+                        plt.savefig(boundary_filepath)
+                        plt.close()
+                        boundary_url = url_for('static', filename=f'uploads/{boundary_filename}')
+                    
+                    # Store model info in session for prediction
+                    from flask import session
+                    session['dt_dataset_path'] = filepath
+                    
+                except Exception as e:
+                    flash(f'Error: {e}', 'error')
+                    return redirect(request.url)
+                    
+            elif action == 'predict':
+                # Handle prediction
+                from flask import session
+                filepath = session.get('dt_dataset_path')
                 
-                flash(f'Prediksi: {prediction_result}', 'success')
+                if not filepath or not os.path.exists(filepath):
+                    flash('Upload dataset terlebih dahulu sebelum prediksi.', 'error')
+                    return redirect(request.url)
                 
-            except Exception as e:
-                flash(f'Error: {e}', 'error')
+                try:
+                    # Reload dataset and retrain
+                    df = pd.read_csv(filepath)
+                    df = df.dropna()
+                    
+                    columns = df.columns.tolist()
+                    feature_cols = columns[:-1]
+                    target_col = columns[-1]
+                    
+                    dataset = {col: df[col].tolist() for col in columns}
+                    
+                    # Encode all categorical columns
+                    label_encoders = {}
+                    encoded_cols = []
+                    for col in feature_cols:
+                        if df[col].dtype == 'object' or df[col].dtype.name == 'bool':
+                            le = LabelEncoder()
+                            df[f'{col}_n'] = le.fit_transform(df[col].astype(str))
+                            label_encoders[col] = le
+                            encoded_cols.append(f'{col}_n')
+                        else:
+                            encoded_cols.append(col)
+                    
+                    # Encode target
+                    le_target = LabelEncoder()
+                    df[f'{target_col}_n'] = le_target.fit_transform(df[target_col].astype(str))
+                    label_encoders[target_col] = le_target
+                    
+                    # Prepare features and target
+                    X = df[encoded_cols].values
+                    y = df[f'{target_col}_n'].values
+                    class_names = le_target.classes_.tolist()
+                    
+                    # Get unique values for dropdowns
+                    dropdown_options = {}
+                    for col in feature_cols:
+                        dropdown_options[col] = df[col].unique().tolist()
+                    
+                    # Train Decision Tree
+                    clf = DecisionTreeClassifier(criterion='entropy', random_state=42)
+                    clf.fit(X, y)
+                    
+                    # Calculate metrics
+                    y_pred_all = clf.predict(X)
+                    cm = confusion_matrix(y, y_pred_all)
+                    accuracy = accuracy_score(y, y_pred_all)
+                    report = classification_report(y, y_pred_all, target_names=[str(c) for c in class_names])
+                    
+                    results = {
+                        'cm': cm.tolist(),
+                        'accuracy': accuracy,
+                        'report': report,
+                        'total_data': len(df),
+                        'feature_cols': feature_cols,
+                        'target_col': target_col
+                    }
+                    
+                    # Generate Tree Visualization
+                    plt.figure(figsize=(20, 12))
+                    plot_tree(clf, filled=True, feature_names=feature_cols, 
+                             class_names=[str(c) for c in class_names], rounded=True, fontsize=10)
+                    tree_filename = 'decision_tree_uploaded.png'
+                    tree_filepath = os.path.join(app.config['UPLOAD_FOLDER'], tree_filename)
+                    plt.tight_layout()
+                    plt.savefig(tree_filepath, dpi=150, bbox_inches='tight')
+                    plt.close()
+                    tree_url = url_for('static', filename=f'uploads/{tree_filename}')
+                    
+                    # Generate Decision Boundary
+                    if len(feature_cols) >= 2:
+                        X_2d = X[:, :2]
+                        clf_2d = DecisionTreeClassifier(criterion='entropy', random_state=42)
+                        clf_2d.fit(X_2d, y)
+                        
+                        plt.figure(figsize=(10, 6))
+                        x_min, x_max = X_2d[:, 0].min() - 0.5, X_2d[:, 0].max() + 0.5
+                        y_min, y_max = X_2d[:, 1].min() - 0.5, X_2d[:, 1].max() + 0.5
+                        xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.02),
+                                           np.arange(y_min, y_max, 0.02))
+                        Z = clf_2d.predict(np.c_[xx.ravel(), yy.ravel()])
+                        Z = Z.reshape(xx.shape)
+                        
+                        n_classes = len(class_names)
+                        colors_light = ['#FFAAAA', '#AAFFAA', '#AAAAFF', '#FFFFAA', '#FFAAFF', '#AAFFFF'][:n_classes]
+                        colors_bold = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'][:n_classes]
+                        
+                        cmap_light = ListedColormap(colors_light)
+                        
+                        plt.contourf(xx, yy, Z, cmap=cmap_light, alpha=0.8)
+                        for idx, cls in enumerate(class_names):
+                            mask = y == idx
+                            plt.scatter(X_2d[mask, 0], X_2d[mask, 1], c=colors_bold[idx], 
+                                       label=str(cls), edgecolor='black', s=80)
+                        plt.title(f'Decision Boundary ({feature_cols[0]} vs {feature_cols[1]})')
+                        plt.xlabel(feature_cols[0])
+                        plt.ylabel(feature_cols[1])
+                        plt.legend()
+                        
+                        boundary_filename = 'dt_boundary_uploaded.png'
+                        boundary_filepath = os.path.join(app.config['UPLOAD_FOLDER'], boundary_filename)
+                        plt.savefig(boundary_filepath)
+                        plt.close()
+                        boundary_url = url_for('static', filename=f'uploads/{boundary_filename}')
+                    
+                    # Get prediction input
+                    input_values = []
+                    for col in feature_cols:
+                        val = request.form.get(col)
+                        if col in label_encoders:
+                            input_values.append(label_encoders[col].transform([str(val)])[0])
+                        else:
+                            input_values.append(float(val))
+                    
+                    input_data = [input_values]
+                    pred = clf.predict(input_data)[0]
+                    pred_prob = clf.predict_proba(input_data)[0]
+                    
+                    prediction_result = str(class_names[pred])
+                    probs = {str(cls): f"{p*100:.2f}%" for cls, p in zip(class_names, pred_prob)}
+                    
+                    flash(f'Prediksi: {prediction_result}', 'success')
+                    
+                except Exception as e:
+                    flash(f'Error: {e}', 'error')
+                    return redirect(request.url)
         
         return render_template('decision_tree_detail.html',
                              show_sidebar=True,
                              task=task,
                              tasks=tasks,
-                             dataset=data,
+                             dataset=dataset,
+                             results=results,
                              tree_url=tree_url,
                              boundary_url=boundary_url,
                              prediction=prediction_result,
-                             probs=probs)
+                             probs=probs,
+                             dropdown_options=dropdown_options)
 
     if request.method == 'POST':
         if 'image' not in request.files:
@@ -609,7 +800,7 @@ def setup_database(app):
         db.session.add(knn_task)
         nb_task = Task(
             title='Naive Bayes',
-            thumbnail='assets/nbthumbnail.png',
+            thumbnail='assets/naivethumnail.png',
             description='Prediksi perilaku pembelian customer menggunakan algoritma Naive Bayes.',
             content='''
 <p>Alat ini melakukan klasifikasi data menggunakan metode <strong>Naive Bayes</strong> dengan dataset <strong>Customer Behaviour</strong>.</p>
@@ -625,11 +816,18 @@ def setup_database(app):
         db.session.add(nb_task)
         dt_task = Task(
             title='Decision Tree',
-            thumbnail='assets/dtthumbnail.png',
-            description='Klasifikasi data menggunakan algoritma Decision Tree (Iris Dataset).',
+            thumbnail='assets/decisionthumnail.png',
+            description='Klasifikasi data menggunakan algoritma Decision Tree dengan upload dataset manual.',
             content='''
-<p>Alat ini mendemonstrasikan algoritma <strong>Decision Tree</strong> menggunakan dataset standar <strong>Iris</strong>.</p>
-<p>Decision Tree membagi data menjadi subset yang lebih kecil berdasarkan aturan keputusan yang diturunkan dari fitur data. Visualisasi di bawah ini menunjukkan struktur pohon keputusan dan batas keputusan untuk dua fitur pertama.</p>
+<p>Alat ini mendemonstrasikan algoritma <strong>Decision Tree</strong> dengan kemampuan upload dataset CSV secara manual.</p>
+<p><strong>Langkah penggunaan:</strong></p>
+<ol>
+<li>Upload file CSV dataset (kolom terakhir akan otomatis dijadikan target)</li>
+<li>Model akan dilatih dan menampilkan hasil evaluasi (Accuracy, Confusion Matrix, Classification Report)</li>
+<li>Visualisasi pohon keputusan dan decision boundary akan ditampilkan</li>
+<li>Masukkan nilai-nilai fitur untuk memprediksi kelas baru</li>
+</ol>
+<p>Decision Tree membagi data menjadi subset yang lebih kecil berdasarkan aturan keputusan yang diturunkan dari fitur data.</p>
 '''
         )
         db.session.add(dt_task)
