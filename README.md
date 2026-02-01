@@ -22,6 +22,8 @@ Aplikasi web interaktif untuk pembelajaran dan demonstrasi algoritma **Computer 
 
 ---
 
+![image alt](https://github.com/AhmdMaulidan/computer-vision/blob/3bd5057656059a5d58c764188eea55739c94ad2e/Ficture%20project-5.png)
+
 ## ✨ Fitur
 
 ### 1. **Gray-Level Co-occurrence Matrix (GLCM)**
